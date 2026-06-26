@@ -4,6 +4,10 @@
 
 这是一个纯前端 Web 小工具。你可以直接打开 `index.html` 使用，也可以部署到 GitHub Pages。
 
+## 在线使用
+
+<https://joannawonderland.github.io/Human-rewriter/>
+
 ## 功能
 
 - 实时检测常见 AI 味：套话、破折号堆砌、句子长短过于均匀、虚动词等。
