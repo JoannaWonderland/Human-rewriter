@@ -1,0 +1,544 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>人话改写器</title>
+<meta name="description" content="把带 AI 腔、翻译腔、套话感的中文改写成自然、平实的人话。" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.25.6/babel.min.js"></script>
+<style>
+  :root {
+    --page: #F6F6F3;
+    --card: #FFFFFF;
+    --ink: #23221F;
+    --sub: #6E6B63;
+    --line: #E6E4DD;
+    --accent: #2B6E62;
+    --accent-soft: #E7F0ED;
+    --warn: #A6453B;
+    --warn-soft: #F4E6E2;
+    --sans: ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", "Hiragino Sans GB", sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html, body { margin: 0; padding: 0; background: var(--page); color: var(--ink); font-family: var(--sans); }
+  * { box-sizing: border-box; }
+  .wrap { max-width: 1024px; margin: 0 auto; padding: 32px 20px; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+  .hint { color: var(--sub); font-size: 14px; line-height: 1.7; }
+  .mono { font-family: var(--mono); }
+  .label { color: var(--sub); font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .pill { border: 1px solid var(--line); background: var(--card); color: var(--sub); border-radius: 999px; padding: 6px 16px; font-size: 14px; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  .pill.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+  .pill:hover:not(.active) { border-color: #c8c5bc; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid2-cfg { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 720px) { .grid2, .grid2-cfg { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; }
+  textarea { width: 100%; min-height: 280px; resize: vertical; border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 15px; line-height: 1.8; background: transparent; color: var(--ink); font-family: inherit; outline: none; }
+  textarea:focus { border-color: #a8a59c; }
+  .out { min-height: 280px; max-height: 480px; overflow-y: auto; white-space: pre-wrap; border: 1px solid var(--line); border-radius: 8px; padding: 12px; font-size: 15px; line-height: 1.85; }
+  .btn { font-family: inherit; font-size: 14px; font-weight: 500; padding: 8px 16px; border-radius: 8px; cursor: pointer; border: 1px solid var(--line); background: var(--card); color: var(--sub); transition: all 0.15s; }
+  .btn:hover:not(:disabled) { border-color: #c8c5bc; }
+  .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn.primary:disabled { background: #B9C6C2; border-color: #B9C6C2; cursor: not-allowed; }
+  .between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .small { font-family: var(--mono); font-size: 11px; color: var(--sub); }
+  .tag { display: inline-flex; align-items: center; gap: 6px; background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn-soft); border-radius: 999px; padding: 4px 12px; font-size: 12px; }
+  .ok { color: var(--accent); font-size: 14px; }
+  .err { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 14px; margin-top: 12px; }
+  .keybox { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 16px; margin-bottom: 20px; }
+  .keybox input, .keybox select { width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-family: var(--mono); font-size: 13px; background: var(--card); color: var(--ink); outline: none; }
+  .keybox input:focus, .keybox select:focus { border-color: #a8a59c; }
+  .keybox .row { justify-content: space-between; margin-top: 8px; }
+  .field { margin-top: 12px; }
+  .field:first-of-type { margin-top: 0; }
+  details { margin-top: 8px; }
+  details summary { cursor: pointer; color: var(--sub); font-size: 13px; user-select: none; }
+  details summary:hover { color: var(--ink); }
+  details .body { color: var(--sub); font-size: 13px; line-height: 1.7; padding: 8px 0 0 0; }
+  details a { color: var(--accent); }
+  footer { color: var(--sub); border-top: 1px solid var(--line); margin-top: 32px; padding-top: 16px; font-size: 12px; line-height: 1.7; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo, useEffect, useRef } = React;
+
+const PATTERNS = [
+  { key: "dash", label: "破折号堆砌", re: /——/g },
+  { key: "noteworthy", label: "套话「值得注意的是」", re: /值得注意的是|需要注意的是|不难发现|众所周知|显而易见|毋庸置疑/g },
+  { key: "summary", label: "套话「综上 / 总而言之」", re: /综上所述|总而言之|总的来说|总结来说|由此可见/g },
+  { key: "inotherwords", label: "「换句话说 / 也就是说」", re: /换句话说|换言之|也就是说/g },
+  { key: "degree", label: "「在某种程度上」", re: /在某种程度上|从某种意义上|在一定程度上|在很大程度上/g },
+  { key: "notonly", label: "「不仅……还 / 而且」", re: /不仅[^。！？\n]{0,30}?(还|而且|也|更)/g },
+  { key: "abc", label: "工整句式「A 的 B 与 C」", re: /[\u4e00-\u9fa5]{2,6}的[\u4e00-\u9fa5]{2,6}(与|和|及)[\u4e00-\u9fa5]{2,6}/g },
+  { key: "empty", label: "虚动词「进行 / 做出 / 实现」", re: /进行(了|着)?[一某]?[次番]?[\u4e00-\u9fa5]{0,4}(操作|处理|分析|优化|改进)|做出了?|加以|予以/g },
+  { key: "letus", label: "「让我们 / 我们可以看到」", re: /让我们|我们可以看到|我们不难|我们会发现/g },
+  { key: "ness", label: "「……性」堆砌", re: /(可读|可操作|可维护|可扩展|稳定|灵活|高效|复杂|重要)性/g },
+  { key: "emoji", label: "emoji", re: /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu },
+];
+
+function detect(text) {
+  const hits = [];
+  for (const p of PATTERNS) {
+    const m = text.match(p.re);
+    if (m && m.length) hits.push({ label: p.label, count: m.length });
+  }
+  const sents = text.split(/[。！？\n]+/).map(s => s.trim()).filter(s => s.length > 2);
+  if (sents.length >= 5) {
+    const lens = sents.map(s => s.length);
+    const mean = lens.reduce((a, b) => a + b, 0) / lens.length;
+    const sd = Math.sqrt(lens.reduce((a, b) => a + (b - mean) ** 2, 0) / lens.length);
+    if (mean > 0 && sd / mean < 0.42) hits.push({ label: "句子长短太均匀", count: sents.length });
+  }
+  return hits.sort((a, b) => b.count - a.count);
+}
+
+function chunkText(text, target = 400) {
+  const paras = text.split(/\n{2,}/);
+  const chunks = [];
+  let buf = "";
+  for (const p of paras) {
+    if (!p.trim()) continue;
+    if ((buf + "\n\n" + p).length > target && buf) { chunks.push(buf); buf = p; }
+    else { buf = buf ? buf + "\n\n" + p : p; }
+  }
+  if (buf) chunks.push(buf);
+  return chunks.length ? chunks : [text];
+}
+
+const PLAIN_RULES = [
+  "你是一位中文编辑，专门把带「AI 腔 / 翻译腔」的文字改写成自然、平实的中文。",
+  "始终遵守这些规矩：",
+  "1. 保留原意和全部具体信息——数字、专有名词、例子、术语一个都不能丢，也不要新增原文没有的事实。",
+  "2. 打散机械排比和整齐对仗，让句子长短不一，像人正常说话。",
+  "3. 删掉空洞的元评论和套话，比如「值得注意的是」「换句话说」「综上所述」「在某种程度上」「不难发现」。",
+  "4. 少用破折号堆砌，别用「它……它……它……」这种连续主语开头。",
+  "5. 用具体的动词和名词，别拿「进行」「做出」「实现」「加以」这类虚词包装动作。",
+  "6. 语气像一个懂行的人平静地跟同行解释，不端着、不喊口号、不煽情、不用 emoji。",
+  "7. 保留原文用的语言（中文就还用中文），保留 Markdown 标题和列表这类结构标记。",
+  "8. 只输出改写后的正文，不要任何解释、不要前言、不要加引号包住整段。",
+];
+
+const SHARP_RULES = [
+  "你在用一种「犀利白话」风格改写中文。它大概是这样：开门见山，先把观点放前面，再慢慢讲道理；满口大白话，短句为主，长短句夹着来；爱用生活里的比方（做饭、打游戏、修东西那种），不堆术语、不端书面腔；带点冷幽默，敢下判断；直接冲着读者说「你」；最烦「正确的废话」，套话一句不留。",
+  "改写时遵守：",
+  "1. 保留原意和全部具体信息——数字、专名、例子一个不许丢，也不许编原文没有的事实。",
+  "2. 观点往前放，别绕弯子。",
+  "3. 句子口语化、短句为主，节奏别整齐，读着像一个有脾气、有想法的人在跟你掰扯。",
+  "4. 能用大白话就别用术语；能打个生活里的比方就打一个。",
+  "5. 删干净「值得注意的是」「换句话说」「综上所述」「在某种程度上」这类话，打散机械排比和整齐对仗。",
+  "6. 可以来点干巴巴的幽默或者一句吐槽，但别油腻、别煽情、别用 emoji。",
+  "7. 保留原文语言和 Markdown 结构标记。",
+  "8. 只输出改写后的正文，别解释、别加前言。",
+  "注意：你是在抓这种说话的劲儿和编辑方法，不是模仿或冒充任何具体的人——不要署名，也不要编造谁说过的话。",
+];
+
+const VOICES = {
+  plain: { label: "平实", hint: "干净、自然、不端着", base: PLAIN_RULES },
+  sharp: { label: "犀利白话", hint: "大白话、短句、敢下判断、带点冷幽默", base: SHARP_RULES },
+};
+
+const INTENSITY = {
+  light: { label: "轻度", hint: "只去套话和翻译腔，尽量贴着原文", rule: "改动幅度小：删掉空话套话和明显的翻译腔，修顺读着别扭的地方，尽量保留原来的句子结构和段落顺序。" },
+  medium: { label: "中度", hint: "该断的断、该删的删，重排句子", rule: "改动适中：长句该断就断，机械排比和整齐对仗全部打散，删掉所有空话套话，让句子长短自然不一，但段落和论点顺序基本不动。通俗易懂，一目十行能抓到重点。" },
+  heavy: { label: "重度", hint: "大胆重写，只保留信息和逻辑", rule: "大胆重写：只保留事实、数字、例子和逻辑，措辞和句式可以完全推翻重来，语气彻底变成口语化的书面语。" },
+};
+
+const MODEL_PRESETS = [
+  { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5（首推，中文最稳）" },
+  { id: "anthropic/claude-opus-4.1", label: "Claude Opus 4.1（更强，更贵）" },
+  { id: "openai/gpt-4o", label: "GPT-4o" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro" },
+  { id: "deepseek/deepseek-chat", label: "DeepSeek V3（便宜量大）" },
+  { id: "x-ai/grok-4", label: "Grok 4" },
+  { id: "__custom__", label: "自定义……" },
+];
+
+function buildSystem(voice, rule) {
+  return VOICES[voice].base.concat([rule]).join("\n");
+}
+
+function App() {
+  const [apiKey, setApiKey] = useState("");
+  const [keySaved, setKeySaved] = useState(false);
+  const [modelChoice, setModelChoice] = useState(MODEL_PRESETS[0].id);
+  const [customModel, setCustomModel] = useState("");
+  const [input, setInput] = useState("");
+  const [output, setOutput] = useState("");
+  const [voice, setVoice] = useState("sharp");
+  const [intensity, setIntensity] = useState("medium");
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
+  const outRef = useRef(null);
+  const followRef = useRef(true); // 是否跟随到底部。用户往上滚就变 false
+  const [atBottom, setAtBottom] = useState(true);
+
+  // 监听用户在输出区的滚动行为
+  useEffect(() => {
+    const el = outRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      // 距离底部 40px 以内算"在底部"，恢复跟随
+      const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+      followRef.current = nearBottom;
+      setAtBottom(nearBottom);
+    };
+    el.addEventListener("scroll", onScroll);
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // 输出更新时，只在用户处于底部附近时自动跟随
+  useEffect(() => {
+    if (loading && outRef.current && followRef.current) {
+      outRef.current.scrollTop = outRef.current.scrollHeight;
+    }
+  }, [output, loading]);
+
+  // 每次启动新的改写，重置为跟随
+  useEffect(() => {
+    if (loading) {
+      followRef.current = true;
+      setAtBottom(true);
+    }
+  }, [loading]);
+
+  useEffect(() => {
+    try {
+      const k = window.localStorage.getItem("openrouter_api_key");
+      const m = window.localStorage.getItem("openrouter_model");
+      const cm = window.localStorage.getItem("openrouter_custom_model");
+      if (k) { setApiKey(k); setKeySaved(true); }
+      if (m) setModelChoice(m);
+      if (cm) setCustomModel(cm);
+    } catch {}
+  }, []);
+
+  const hits = useMemo(() => (input.trim() ? detect(input) : []), [input]);
+
+  function effectiveModel() {
+    if (modelChoice === "__custom__") return customModel.trim();
+    return modelChoice;
+  }
+
+  function saveKey() {
+    try {
+      window.localStorage.setItem("openrouter_api_key", apiKey);
+      window.localStorage.setItem("openrouter_model", modelChoice);
+      window.localStorage.setItem("openrouter_custom_model", customModel);
+      setKeySaved(true);
+      setTimeout(() => setKeySaved(false), 1600);
+    } catch {
+      setError("浏览器不让我把 key 存进 localStorage，不过这次会话里还是能用的。");
+    }
+  }
+  function clearKey() {
+    try {
+      window.localStorage.removeItem("openrouter_api_key");
+      window.localStorage.removeItem("openrouter_model");
+      window.localStorage.removeItem("openrouter_custom_model");
+    } catch {}
+    setApiKey("");
+    setKeySaved(false);
+  }
+
+  async function rewriteChunk(text, onDelta) {
+    const model = effectiveModel();
+    if (!model) throw new Error("没选模型");
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + apiKey,
+        "HTTP-Referer": window.location.origin || "http://localhost",
+        "X-Title": "人话改写器",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 16000,
+        stream: true,
+        messages: [
+          { role: "system", content: buildSystem(voice, INTENSITY[intensity].rule) },
+          { role: "user", content: "请改写下面这段，直接给改写结果：\n\n" + text },
+        ],
+      }),
+    });
+    if (!res.ok) {
+      const t = await res.text();
+      throw new Error("接口 " + res.status + "：" + t.slice(0, 300));
+    }
+    if (!res.body) throw new Error("浏览器不支持流式读取");
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+    let buffer = "";
+    let full = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      // SSE: 一行一行解析，data: {...}\n\n
+      let idx;
+      while ((idx = buffer.indexOf("\n")) !== -1) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line || line.startsWith(":")) continue; // 心跳/注释
+        if (!line.startsWith("data:")) continue;
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") return full.trim();
+        try {
+          const j = JSON.parse(payload);
+          const delta = j && j.choices && j.choices[0] && j.choices[0].delta && j.choices[0].delta.content;
+          if (delta) {
+            full += delta;
+            if (onDelta) onDelta(delta);
+          }
+        } catch (e) {
+          // 偶尔会有不完整的 JSON 片段，跳过
+        }
+      }
+    }
+    return full.trim();
+  }
+
+  async function handleRewrite() {
+    if (!input.trim() || loading) return;
+    if (!apiKey.trim()) { setError("先在上面填一下 OpenRouter API key。"); return; }
+    if (!effectiveModel()) { setError("选一个模型，或者在自定义里填一个 model slug。"); return; }
+    setLoading(true); setError(""); setOutput(""); setCopied(false);
+    const chunks = chunkText(input);
+    setProgress({ done: 0, total: chunks.length });
+    const results = [];
+    let liveBuf = "";
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        liveBuf = "";
+        const finished = await rewriteChunk(chunks[i], (delta) => {
+          liveBuf += delta;
+          // 把已经改完的几段 + 当前正在流的拼一起显示
+          const live = [...results, liveBuf].join("\n\n");
+          setOutput(live);
+        });
+        results.push(finished);
+        setOutput(results.join("\n\n"));
+        setProgress({ done: i + 1, total: chunks.length });
+      }
+    } catch (e) {
+      setError("改写中断了：" + (e && e.message ? e.message : "未知错误") + "。检查一下 API key、模型 slug 和网络，再点一次「改成人话」就行。");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(output);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setError("浏览器没让我访问剪贴板，手动选中复制一下吧。");
+    }
+  }
+
+  function loadSample() {
+    setInput(
+      "首先，我们需要明确的是，本方案在很大程度上实现了对用户体验的全面优化。\n\n" +
+      "值得注意的是，它不仅提升了系统的稳定性，还增强了整体的可扩展性。换句话说，通过对架构进行了深度的重构，我们做出了一系列卓有成效的改进。\n\n" +
+      "综上所述，该方案具有极高的实用价值和广阔的应用前景。"
+    );
+    setOutput(""); setError("");
+  }
+
+  const selector = (map, cur, set) => (
+    <div className="row">
+      {Object.entries(map).map(([k, v]) => (
+        <button key={k} onClick={() => set(k)} className={"pill" + (cur === k ? " active" : "")}>{v.label}</button>
+      ))}
+      <span className="small" style={{ marginLeft: 4 }}>{map[cur].hint}</span>
+    </div>
+  );
+
+  return (
+    <div className="wrap">
+      <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 4 }}>
+        <h1>人话改写器</h1>
+        <span className="small">via OpenRouter</span>
+      </div>
+      <p className="hint" style={{ marginTop: 4, marginBottom: 20 }}>
+        把一股 GPT 味的文字粘进左边，挑个风格和强度，右边出人话。中间会告诉你它到底"AI"在哪儿。
+      </p>
+
+      {/* API key + 模型 */}
+      <div className="keybox">
+        <div className="field">
+          <div className="label">OpenRouter API key</div>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={e => { setApiKey(e.target.value); setKeySaved(false); }}
+            placeholder="sk-or-v1-..."
+            spellCheck={false}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="field">
+          <div className="label">模型</div>
+          <select value={modelChoice} onChange={e => setModelChoice(e.target.value)}>
+            {MODEL_PRESETS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          </select>
+          {modelChoice === "__custom__" && (
+            <input
+              style={{ marginTop: 8 }}
+              value={customModel}
+              onChange={e => setCustomModel(e.target.value)}
+              placeholder="比如 qwen/qwen3-max 或者 mistralai/mistral-large"
+              spellCheck={false}
+            />
+          )}
+        </div>
+
+        <div className="row">
+          <button className="btn" onClick={saveKey} disabled={!apiKey.trim()}>{keySaved ? "已保存 ✓" : "保存到本地浏览器"}</button>
+          {apiKey && <button className="btn" onClick={clearKey}>清除</button>}
+          <span className="small" style={{ marginLeft: "auto" }}>仅存在你的浏览器里，不会上传任何地方</span>
+        </div>
+
+        <details>
+          <summary>怎么拿 OpenRouter key？</summary>
+          <div className="body">
+            去 <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer">openrouter.ai/keys</a> 登录后点 Create Key，复制粘进上面。先充几刀就能用，按 token 付费，改一篇长文几分钱。所有可用模型和当前价格在 <a href="https://openrouter.ai/models" target="_blank" rel="noreferrer">openrouter.ai/models</a>，找到想用的，复制它的 model slug（形如 <span className="mono">提供方/模型名</span>）粘到"自定义"那栏。
+          </div>
+        </details>
+      </div>
+
+      {/* 风格 + 强度 */}
+      <div className="grid2-cfg">
+        <div>
+          <div className="label">风格</div>
+          {selector(VOICES, voice, setVoice)}
+        </div>
+        <div>
+          <div className="label">强度</div>
+          {selector(INTENSITY, intensity, setIntensity)}
+        </div>
+      </div>
+
+      {/* 双栏 */}
+      <div className="grid2">
+        <div className="card">
+          <div className="between">
+            <span className="small" style={{ textTransform: "uppercase" }}>原文</span>
+            <span className="small">{input.length} 字</span>
+          </div>
+          <textarea
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            placeholder="把那段读着难受的文字贴这儿……"
+            spellCheck={false}
+          />
+          <div className="row" style={{ marginTop: 12 }}>
+            <button className="btn primary" onClick={handleRewrite} disabled={loading || !input.trim()}>
+              {loading ? `提纯中… ${progress.done}/${progress.total}` : "改成人话"}
+            </button>
+            <button className="btn" onClick={loadSample}>来个示例</button>
+            <button className="btn" onClick={() => { setInput(""); setOutput(""); setError(""); }}>清空</button>
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="between">
+            <span className="small" style={{ color: "var(--accent)", textTransform: "uppercase" }}>
+              人话 · {VOICES[voice].label}
+            </span>
+            {output && !loading && (
+              <button onClick={handleCopy} className="small" style={{ background: "none", border: "none", cursor: "pointer", color: copied ? "var(--accent)" : "var(--sub)" }}>
+                {copied ? "已复制 ✓" : "复制"}
+              </button>
+            )}
+          </div>
+          {loading && progress.total > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <div className="small" style={{ marginBottom: 4 }}>
+                正在改第 {Math.min(progress.done + 1, progress.total)} / {progress.total} 段 · 已收 {output.length} 字
+              </div>
+              <div style={{ height: 4, background: "var(--line)", borderRadius: 2, overflow: "hidden" }}>
+                <div style={{
+                  width: `${(progress.done / progress.total) * 100}%`,
+                  height: "100%",
+                  background: "var(--accent)",
+                  transition: "width 0.3s ease",
+                }} />
+              </div>
+            </div>
+          )}
+          <div style={{ position: "relative" }}>
+            <div ref={outRef} className="out" style={{ color: output ? "var(--ink)" : "var(--sub)" }}>
+              {output || (loading ? "等模型开口……第一个字马上就到。" : "改好的文字会出现在这里。")}
+            </div>
+            {loading && !atBottom && (
+              <button
+                onClick={() => {
+                  if (outRef.current) {
+                    outRef.current.scrollTop = outRef.current.scrollHeight;
+                    followRef.current = true;
+                    setAtBottom(true);
+                  }
+                }}
+                style={{
+                  position: "absolute",
+                  right: 12,
+                  bottom: 12,
+                  background: "var(--accent)",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: 999,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                }}
+              >
+                ↓ 还在继续生成，回到底部
+              </button>
+            )}
+          </div>
+          {error && <div className="err">{error}</div>}
+        </div>
+      </div>
+
+      {/* AI 味检测 */}
+      <div style={{ marginTop: 24 }}>
+        <div className="label">检测到的 AI 味</div>
+        {input.trim() === "" ? (
+          <p className="hint" style={{ margin: 0 }}>贴点文字，这里实时标出常见的套话和节奏问题。</p>
+        ) : hits.length === 0 ? (
+          <p className="ok" style={{ margin: 0 }}>没抓到明显的 AI 味，读着应该挺顺。</p>
+        ) : (
+          <div className="row">
+            {hits.map((h, i) => (
+              <span key={i} className="tag">{h.label} <b className="mono">×{h.count}</b></span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <footer>
+        检测在本地用纯规则跑，秒出；改写直接调你自己的 OpenRouter API，长文会自动切几段逐段处理。「犀利白话」只是一个口语化编辑风格，不指向任何具体的人。AI 味只是提示，最后读着顺不顺还得你自己定。
+      </footer>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
